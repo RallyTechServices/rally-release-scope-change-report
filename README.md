@@ -1,5 +1,11 @@
 #Release Scope Change
 
+## Description
+
+This is the Release Scope Change report updated to use SDK2 and the 
+Lookback API.  The lowest-level PIs will also display in the daily
+scope change.
+
 ## Development Notes
 
 ### First Load

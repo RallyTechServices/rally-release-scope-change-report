@@ -37,9 +37,7 @@ Ext.define('CustomApp', {
         var end_iso   = Rally.util.DateTime.toIsoString(end_js).replace(/T.*$/,"");
         
         var number_of_days_in_release = Rally.technicalservices.util.Utilities.daysBetween(start_js,end_js) + 1 ;
-        var number_of_days_into_release = Rally.technicalservices.util.Utilities.daysBetween(start_js,today) + 1 ;
-
-        var number_of_days_remaining_in_release = number_of_days_in_release - number_of_days_into_release + 1;
+        var number_of_days_remaining_in_release = Rally.technicalservices.util.Utilities.daysBetween(today,end_js) + 1 ;
         
         var msg = start_iso + " - " + end_iso;
         if ( today < start_js ) {

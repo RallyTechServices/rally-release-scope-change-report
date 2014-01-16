@@ -3,11 +3,11 @@
 <head>
     <title>Release Scope Change</title>
     <!--  (c) 2014 Rally Software Development Corp.  All Rights Reserved. -->
-    <!--  Build Date: Wed Jan 15 2014 19:33:54 GMT-0800 (PST) -->
+    <!--  Build Date: Wed Jan 15 2014 19:38:40 GMT-0800 (PST) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Wed Jan 15 2014 19:33:54 GMT-0800 (PST)";
-        var CHECKSUM = 4596322216;
+        var APP_BUILD_DATE = "Wed Jan 15 2014 19:38:40 GMT-0800 (PST)";
+        var CHECKSUM = 4493725090;
     </script>
     
     <script type="text/javascript" src="/apps/2.0rc2/sdk.js"></script>
@@ -295,9 +295,7 @@ Ext.define('CustomApp', {
         var end_iso   = Rally.util.DateTime.toIsoString(end_js).replace(/T.*$/,"");
         
         var number_of_days_in_release = Rally.technicalservices.util.Utilities.daysBetween(start_js,end_js) + 1 ;
-        var number_of_days_into_release = Rally.technicalservices.util.Utilities.daysBetween(start_js,today) + 1 ;
-
-        var number_of_days_remaining_in_release = number_of_days_in_release - number_of_days_into_release + 1;
+        var number_of_days_remaining_in_release = Rally.technicalservices.util.Utilities.daysBetween(today,end_js) + 1 ;
         
         var msg = start_iso + " - " + end_iso;
         if ( today < start_js ) {
