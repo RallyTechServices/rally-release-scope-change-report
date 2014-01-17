@@ -2,6 +2,7 @@ Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
     prefixes: {},
+    preliminary_estimates: {},
     logger: new Rally.technicalservices.Logger(),
     items: [
         {xtype:'container',itemId:'header_box', defaults: { padding: 5, margin: 5}, layout: { type: 'hbox'}, items:[
@@ -14,7 +15,7 @@ Ext.define('CustomApp', {
     ],
     launch: function() {
         this.logger.log("Launched with this context ", this.getContext());
-        this._setPrefixes().then({
+        Deft.Chain.pipeline([this._setPrefixes, this._setPreliminaryEstimates],this).then({
             scope: this,
             success: function(throw_away) {
                 this._addReleaseBox();
@@ -22,10 +23,10 @@ Ext.define('CustomApp', {
             failure: function(error) {
                 alert(error);
             }
-            
         });
     },
     _setPrefixes: function() {
+        this.logger.log("_setPrefixes");
         var me = this;
         var deferred = Ext.create('Deft.Deferred');
         var pi_filter = Ext.create('Rally.data.wsapi.Filter',{property:'TypePath',operator:'contains',value:"PortfolioItem/"});
@@ -50,6 +51,33 @@ Ext.define('CustomApp', {
                             prefixes[record.get('TypePath')] = record.get('IDPrefix');
                         });
                         this.prefixes = prefixes;
+                        deferred.resolve([]);
+                    }
+                }
+            }
+        });
+        return deferred;
+    },
+    _setPreliminaryEstimates: function() {
+        this.logger.log("_setPreliminaryEstimates");
+        var me = this;
+        //preliminary_estimates
+        var deferred = Ext.create('Deft.Deferred');
+        Ext.create('Rally.data.wsapi.Store',{
+            model:'PreliminaryEstimate',
+            autoLoad: true,
+            fetch: ['ObjectID','Value'],
+            listeners: {
+                scope: this,
+                load: function(store,records,successful){
+                    if ( ! successful ) {
+                        deferred.reject("There was a problem finding values for PreliminaryEstimates.");
+                    } else {
+                        var estimates = {};
+                        Ext.Array.each(records,function(record){
+                            estimates[record.get('ObjectID')] = record.get('Value');
+                        });
+                        this.preliminary_estimates = estimates;
                         deferred.resolve([]);
                     }
                 }
@@ -187,8 +215,8 @@ Ext.define('CustomApp', {
         Ext.create('Rally.data.lookback.SnapshotStore',{
             autoLoad: true,
             filters: filters,
-            fetch: ['PlanEstimate','_PreviousValues','_UnformattedID','Release','_TypeHierarchy','Name'],
-            hydrate: ['_TypeHierarchy'],
+            fetch: ['PlanEstimate','_PreviousValues','_UnformattedID','Release','_TypeHierarchy','Name','PreliminaryEstimate'],
+            hydrate: ['_TypeHierarchy','PreliminaryEstimate'],
             listeners: {
                 scope: this,
                 load: function(store,snaps,successful) {
@@ -211,8 +239,26 @@ Ext.define('CustomApp', {
             var previous_release = snap.get("_PreviousValues").Release;
             var release = snap.get("Release");
             var id = snap.get('_UnformattedID');
+            
             var previous_size = snap.get("_PreviousValues").PlanEstimate;
             var size = snap.get("PlanEstimate") || 0;
+                                    
+            var type_hierarchy = snap.get('_TypeHierarchy');
+            var type = type_hierarchy[type_hierarchy.length - 1 ];
+            //preliminary_estimates
+            if ( /Portfolio/.test(type) ) {
+                size = snap.get("PreliminaryEstimate") || 0;
+                me.logger.log("here",size);
+
+                if ( size > 0 ) {
+                    size = me.preliminary_estimates[size];
+                }
+                previous_size = snap.get("_PreviousValues").PreliminaryEstimate;
+                if ( !isNaN(previous_size) ) {
+                    previous_size = me.preliminary_estimates[previous_size];
+                }
+                me.logger.log("here",size,previous_size);
+            }
             
             var size_difference = null // change was not about the size
             if ( !isNaN(previous_size) ) {
@@ -223,9 +269,11 @@ Ext.define('CustomApp', {
                 // change is in size and was blank before
                 size_difference = size;
             }
-                        
-            var type_hierarchy = snap.get('_TypeHierarchy');
-            var type = type_hierarchy[type_hierarchy.length - 1 ];
+            
+            if ( typeof previous_size == 'undefined' && /Portfolio/.test(type) ) {
+                // change is in size and was blank before
+                size_difference = size;
+            }
             
             if (size_difference) {
                 changes.push({
