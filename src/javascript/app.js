@@ -207,7 +207,7 @@ Ext.define('CustomApp', {
         this.logger.log("_processSnaps",snaps);
         var changes = [];
         Ext.Array.each(snaps,function(snap){
-            var change_date = snap.get('_ValidFrom').replace(/T.*$/,"");
+            var change_date = Rally.util.DateTime.toIsoString(Rally.util.DateTime.fromIsoString(snap.get('_ValidFrom'))).replace(/T.*$/,"");
             var previous_release = snap.get("_PreviousValues").Release;
             var release = snap.get("Release");
             var id = snap.get('_UnformattedID');
