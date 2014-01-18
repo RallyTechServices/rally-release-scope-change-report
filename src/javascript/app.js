@@ -3,6 +3,9 @@ Ext.define('CustomApp', {
     componentCls: 'app',
     prefixes: {},
     preliminary_estimates: {},
+    show_types: ['PortfolioItem'],
+/*    show_types: ['HierarchicalRequirement','Defect','PortfolioItem'], */
+    alternate_pi_size_field: 'c_PIPlanEstimate',
     logger: new Rally.technicalservices.Logger(),
     items: [
         {xtype:'container',itemId:'header_box', defaults: { padding: 5, margin: 5}, layout: { type: 'hbox'}, items:[
@@ -178,16 +181,51 @@ Ext.define('CustomApp', {
         return deferred;
     },
     _getSnaps:function(release_oids) {
-        this.logger.log("_getSnaps",release_oids);
+        var me = this;
+        this.logger.log("_getSnaps",release_oids,release_oids.length);
         var deferred = Ext.create('Deft.Deferred');
         this.release_oids = release_oids;
+
+        var page_size = 2;
+        var total_count = release_oids.length;
+        var start_index = 0;
+        
+        // divide up the calls because there's a limit to how many characters
+        // we can put onto a GET
+        var promises = [];
+        while ( start_index < total_count ) {
+            var oids_subset = Ext.Array.slice(release_oids,start_index,start_index+page_size);
+            promises.push(this._getSnapsForSubset(oids_subset));
+            start_index = start_index + page_size;
+        }
+        
+        Deft.Promise.all(promises).then({
+            scope: this,
+            success: function(records) {
+                var snaps = [];
+                Ext.Array.each(records,function(record_collection){
+                    Ext.Array.push(snaps,record_collection);
+                });
+                deferred.resolve(snaps);
+            },
+            failure: function(error) {
+                deferred.reject(error);
+            }
+        });
+            
+        return deferred;
+    },
+    _getSnapsForSubset:function(release_oids) {
+        var deferred = Ext.create('Deft.Deferred');
+        var me = this;
+        this.logger.log("_getSnapsForSubset",release_oids,release_oids.length);
         var start_date_iso = Rally.util.DateTime.toIsoString(this.start_date);
         var end_date_iso = Rally.util.DateTime.toIsoString(this.end_date);
         
         var type_filter = Ext.create('Rally.data.lookback.QueryFilter', {
             property: '_TypeHierarchy',
             operator: 'in',
-            value: ['Defect', 'HierarchicalRequirement', 'PortfolioItem' ]
+            value: this.show_types
         });
         
         var date_filter = Ext.create('Rally.data.lookback.QueryFilter', {
@@ -208,21 +246,46 @@ Ext.define('CustomApp', {
             property: '_PreviousValues.Release',
             operator: 'in',
             value:release_oids
-        })); 
+        }));
         
-        var filters = type_filter.and(date_filter).and(release_filter);
+        var incoming_release_change_filter = Ext.create('Rally.data.lookback.QueryFilter', {
+            property: 'Release',
+            operator: 'in',
+            value:release_oids
+        }).and(Ext.create('Rally.data.lookback.QueryFilter', {
+            property: '_PreviousValues.Release',
+            operator: 'exists',
+            value:true
+        }));
+        
+        var outgoing_release_change_filter = Ext.create('Rally.data.lookback.QueryFilter', {
+            property: '_PreviousValues.Release',
+            operator: 'in',
+            value:release_oids
+        });
+        
+        var size_change_filter = Ext.create('Rally.data.lookback.QueryFilter',{
+            property: '_PreviousValues.' + this.alternate_pi_size_field,
+            operator: 'exists',
+            value: true
+        });
+        
+        var type_change_filter = incoming_release_change_filter.or(outgoing_release_change_filter.or(size_change_filter));
+        
+        var filters = type_filter.and(date_filter).and(release_filter).and(type_change_filter);
         
         Ext.create('Rally.data.lookback.SnapshotStore',{
             autoLoad: true,
             filters: filters,
-            fetch: ['PlanEstimate','_PreviousValues','_UnformattedID','Release','_TypeHierarchy','Name','PreliminaryEstimate'],
-            hydrate: ['_TypeHierarchy','PreliminaryEstimate'],
+            fetch: ['PlanEstimate','_PreviousValues','_UnformattedID','Release','_TypeHierarchy','Name','PreliminaryEstimate',this.alternate_pi_size_field],
+            hydrate: ['_TypeHierarchy'],
             listeners: {
                 scope: this,
                 load: function(store,snaps,successful) {
                     if ( !successful ) {
                         deferred.reject("There was a problem retrieving changes");
                     } else {
+                        me.logger.log("Back for ",release_oids);
                         deferred.resolve(snaps);
                     }   
                 }
@@ -236,103 +299,79 @@ Ext.define('CustomApp', {
         var changes = [];
         Ext.Array.each(snaps,function(snap){
             var change_date = Rally.util.DateTime.toIsoString(Rally.util.DateTime.fromIsoString(snap.get('_ValidFrom'))).replace(/T.*$/,"");
-            var previous_release = snap.get("_PreviousValues").Release;
-            var release = snap.get("Release");
-            var id = snap.get('_UnformattedID');
+            var id = me._getIdFromSnap(snap);
             
-            var previous_size = snap.get("_PreviousValues").PlanEstimate;
-            var size = snap.get("PlanEstimate") || 0;
-                                    
+            var previous_size = snap.get("_PreviousValues")[me.alternate_pi_size_field];
+            var size = snap.get(me.alternate_pi_size_field) || 0;
+                                  
             var type_hierarchy = snap.get('_TypeHierarchy');
             var type = type_hierarchy[type_hierarchy.length - 1 ];
-            //preliminary_estimates
-            if ( /Portfolio/.test(type) ) {
-                size = snap.get("PreliminaryEstimate") || 0;
-                me.logger.log("here",size);
-
-                if ( size > 0 ) {
-                    size = me.preliminary_estimates[size];
-                }
-                previous_size = snap.get("_PreviousValues").PreliminaryEstimate;
-                if ( !isNaN(previous_size) ) {
-                    previous_size = me.preliminary_estimates[previous_size];
-                }
-                me.logger.log("here",size,previous_size);
-            }
             
-            var size_difference = null // change was not about the size
-            if ( !isNaN(previous_size) ) {
-                // the value changed
+            var change_type = me._getChangeTypeFromSnap(snap);
+          
+            var size_difference = size;
+            if ( change_type === "Size Change" ) {
                 size_difference = size - previous_size;
             }
-            if ( typeof previous_size != 'undefined' && previous_size == null ) {
-                // change is in size and was blank before
-                size_difference = size;
+            if ( change_type === "Removed from Release" ) {
+                size_difference = -1 * size_difference;
             }
             
-            if ( typeof previous_size == 'undefined' && /Portfolio/.test(type) ) {
-                // change is in size and was blank before
-                size_difference = size;
-            }
-            
-            if (size_difference) {
+            if ( change_type ) {
                 changes.push({
-                    FormattedID: me.prefixes[type] + id,
+                    FormattedID: id,
                     PlanEstimate: size,
                     ChangeDate: change_date,
                     ChangeValue: size_difference,
                     _type: type,
                     Name: snap.get('Name'),
-                    ChangeType: 'Size Change'
+                    ChangeType: change_type,
+                    timestamp: snap.get('_ValidFrom'),
+                    id: id + '' + snap.get('_ValidFrom')
                 });
-            } else {
-                // catch the ones that were added/removed to the release
-                var current_release = snap.get('Release');
-                var former_release  = snap.get('_PreviousValues').Release;
-                if ( typeof former_release != 'undefined' ) {
-                    // undefined is not a release change!
-                    me.logger.log("Release Change", id, current_release,former_release);
-                    var added = false;
-                    var removed = false;
-                    size_difference = size;
-
-                    var change_type = "Added to Release";
-                    if (former_release == null) {
-                        added = true;
-                    } else {
-                        if ( Ext.Array.indexOf(me.release_oids,current_release) > -1 ) {
-                            added = true;
-                        }
-                        if ( Ext.Array.indexOf(me.release_oids,former_release) > -1 ) {
-                            removed = true;
-                        }
-                        if ( removed ) {
-                            change_type = "Removed from Release";
-                            size_difference = -1 * size_difference;
-                        }
-                    }
-                    
-                    if ( ! (added && removed) ) {
-                        changes.push({
-                            FormattedID: me.prefixes[type] + id,
-                            PlanEstimate: size,
-                            ChangeDate: change_date,
-                            ChangeValue: size_difference || 0,
-                            _type: type,
-                            Name: snap.get('Name'),
-                            ChangeType: change_type
-                        });
-                    }
-                }
             }
         });
         return changes;
+    },
+    _getIdFromSnap: function(snap){
+        var type_hierarchy = snap.get('_TypeHierarchy');
+        var type = type_hierarchy[type_hierarchy.length - 1 ];
+        return this.prefixes[type] + snap.get('_UnformattedID');
+    },
+    _getChangeTypeFromSnap: function(snap){
+        var change_type = false;
+        
+        var previous_release = snap.get("_PreviousValues").Release;
+        var release = snap.get("Release");
+        
+        var type_hierarchy = snap.get('_TypeHierarchy');
+        var type = type_hierarchy[type_hierarchy.length - 1 ];
+        var id = this._getIdFromSnap(snap);
+        
+        var previous_size = snap.get("_PreviousValues").PlanEstimate;
+        var size = snap.get("PlanEstimate") || 0;
+                   
+        if ( previous_release === null && Ext.Array.indexOf(this.release_oids,release) > -1 ) {
+            change_type = "Added to Release";
+        } else if ( Ext.Array.indexOf(this.release_oids,release) > -1 && Ext.Array.indexOf(this.release_oids,previous_release) === -1 ) {
+            change_type = "Added to Release";
+        } else if ( release === "" && typeof previous_size !== "undefined") {
+            change_type = "Removed from Release";
+        } else if ( size !== previous_size && typeof previous_size !== "undefined") {
+            change_type = "Size Change";
+        }
+        
+        var change_date = Rally.util.DateTime.toIsoString(Rally.util.DateTime.fromIsoString(snap.get('_ValidFrom')));
+        this.logger.log(id, change_date, change_type, snap);
+        return change_type;
     },
     _makeGrid: function(changes){
         this.logger.log("_makeGrid",changes);
         
         var store = Ext.create('Rally.data.custom.Store',{
             data: changes,
+            limit: 'Infinity',
+            pageSize: 5000,
             groupField: 'ChangeDate'
         });
         
@@ -350,7 +389,8 @@ Ext.define('CustomApp', {
                 {text:'Name',dataIndex:'Name',flex:1},
                 {text:'Size',dataIndex:'PlanEstimate'},
                 {text:'Delta',dataIndex:'ChangeValue'},
-                {text:'Action', dataIndex:'ChangeType'}
+                {text:'Action', dataIndex:'ChangeType'},
+                {text:'timestamp',dataIndex:'timestamp'}
             ]
         });
         
