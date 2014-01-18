@@ -3,8 +3,9 @@
 ## Description
 
 This is the Release Scope Change report updated to use SDK2 and the 
-Lookback API.  The lowest-level PIs will also display in the daily
-scope change.
+Lookback API. This version is pinned to the lowest level PIs assigned
+to a release -- does not show the stories and defects yet.  Also, it's
+pinned to a custom field for the name of the field to size with. 
 
 ## Development Notes
 
