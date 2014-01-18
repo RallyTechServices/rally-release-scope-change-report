@@ -391,8 +391,7 @@ Ext.define('CustomApp', {
                 {text:'Name',dataIndex:'Name',flex:1},
                 {text:'Size',dataIndex:'PlanEstimate'},
                 {text:'Delta',dataIndex:'ChangeValue'},
-                {text:'Action', dataIndex:'ChangeType'},
-                {text:'timestamp',dataIndex:'timestamp'}
+                {text:'Action', dataIndex:'ChangeType'}
             ]
         });
         
