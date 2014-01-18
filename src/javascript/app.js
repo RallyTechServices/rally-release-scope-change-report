@@ -137,6 +137,7 @@ Ext.define('CustomApp', {
         var end_js    = release.get('ReleaseDate');
         
         if ( today < start_js ) {
+            this.setLoading(false);
             this.down('#change_summary_box').add({
                 xtype:'container',
                 html:'Release has not started yet.'
