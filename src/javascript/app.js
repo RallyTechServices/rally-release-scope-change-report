@@ -97,6 +97,7 @@ Ext.define('CustomApp', {
                 scope: this,
                 change: function(rb) {
                     this.logger.log(rb.getRecord());
+                    this.setLoading();
                     this.down('#daily_box').removeAll();
                     this.down('#change_summary_box').removeAll();
                     this.down('#release_description_box').update(this._getReleaseSummary(rb.getRecord()));
@@ -367,7 +368,7 @@ Ext.define('CustomApp', {
     },
     _makeGrid: function(changes){
         this.logger.log("_makeGrid",changes);
-        
+        this.setLoading(false);
         var store = Ext.create('Rally.data.custom.Store',{
             data: changes,
             limit: 'Infinity',
