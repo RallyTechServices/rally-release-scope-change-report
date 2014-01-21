@@ -322,6 +322,7 @@ Ext.define('CustomApp', {
             if ( change_type ) {
                 changes.push({
                     FormattedID: id,
+                    _ref: "/" + type.toLowerCase() + "/" + snap.get('ObjectID'),
                     PlanEstimate: size,
                     ChangeDate: change_date,
                     ChangeValue: size_difference,
@@ -386,6 +387,8 @@ Ext.define('CustomApp', {
             ]
         });
         
+        var id_renderer = this._renderID;
+        
         if ( this.grid ) { this.grid.destroy(); }
         this.grid = this.down('#daily_box').add({
             xtype:'rallygrid',
@@ -396,7 +399,7 @@ Ext.define('CustomApp', {
                 groupHeaderTpl: '{name}'
             }],
             columnCfgs: [
-                {text:'id',dataIndex:'FormattedID'},
+                {text:'id',dataIndex:'FormattedID',renderer: id_renderer},
                 {text:'Name',dataIndex:'Name',flex:1},
                 {text:'Size',dataIndex:'PlanEstimate'},
                 {text:'Delta',dataIndex:'ChangeValue'},
@@ -405,5 +408,8 @@ Ext.define('CustomApp', {
         });
         
         return [];
+    },
+    _renderID: function(value,cellData,record,rowIndex,colIndex,store,view) {
+        return "<a target='_top' href='" + Rally.nav.Manager.getDetailUrl(record) + "'>" + value + "</a>";
     }
 });

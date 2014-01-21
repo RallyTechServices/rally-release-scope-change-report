@@ -3,11 +3,11 @@
 <head>
     <title>Release Scope Change</title>
     <!--  (c) 2014 Rally Software Development Corp.  All Rights Reserved. -->
-    <!--  Build Date: Mon Jan 20 2014 17:47:53 GMT-0800 (PST) -->
+    <!--  Build Date: Mon Jan 20 2014 18:13:35 GMT-0800 (PST) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Mon Jan 20 2014 17:47:53 GMT-0800 (PST)";
-        var CHECKSUM = 23227348222;
+        var APP_BUILD_DATE = "Mon Jan 20 2014 18:13:35 GMT-0800 (PST)";
+        var CHECKSUM = 23898821526;
     </script>
     
     <script type="text/javascript" src="/apps/2.0rc2/sdk.js"></script>
@@ -580,6 +580,7 @@ Ext.define('CustomApp', {
             if ( change_type ) {
                 changes.push({
                     FormattedID: id,
+                    _ref: "/" + type.toLowerCase() + "/" + snap.get('ObjectID'),
                     PlanEstimate: size,
                     ChangeDate: change_date,
                     ChangeValue: size_difference,
@@ -644,6 +645,8 @@ Ext.define('CustomApp', {
             ]
         });
         
+        var id_renderer = this._renderID;
+        
         if ( this.grid ) { this.grid.destroy(); }
         this.grid = this.down('#daily_box').add({
             xtype:'rallygrid',
@@ -654,7 +657,7 @@ Ext.define('CustomApp', {
                 groupHeaderTpl: '{name}'
             }],
             columnCfgs: [
-                {text:'id',dataIndex:'FormattedID'},
+                {text:'id',dataIndex:'FormattedID',renderer: id_renderer},
                 {text:'Name',dataIndex:'Name',flex:1},
                 {text:'Size',dataIndex:'PlanEstimate'},
                 {text:'Delta',dataIndex:'ChangeValue'},
@@ -663,6 +666,9 @@ Ext.define('CustomApp', {
         });
         
         return [];
+    },
+    _renderID: function(value,cellData,record,rowIndex,colIndex,store,view) {
+        return "<a target='_top' href='" + Rally.nav.Manager.getDetailUrl(record) + "'>" + value + "</a>";
     }
 });
 
