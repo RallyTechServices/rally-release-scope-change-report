@@ -350,12 +350,14 @@ Ext.define('CustomApp', {
         var type = type_hierarchy[type_hierarchy.length - 1 ];
         var id = this._getIdFromSnap(snap);
         
-        var previous_size = snap.get("_PreviousValues").PlanEstimate;
-        var size = snap.get("PlanEstimate") || 0;
-                   
+        var previous_size = snap.get("_PreviousValues")[this.alternate_pi_size_field];
+        var size = snap.get(this.alternate_pi_size_field) || 0;
+        
         if ( previous_release === null && Ext.Array.indexOf(this.release_oids,release) > -1 ) {
             change_type = "Added to Release";
-        } else if ( Ext.Array.indexOf(this.release_oids,release) > -1 && Ext.Array.indexOf(this.release_oids,previous_release) === -1 ) {
+        } else if ( Ext.Array.indexOf(this.release_oids,release) > -1 && 
+            Ext.Array.indexOf(this.release_oids,previous_release) === -1 &&
+            typeof previous_release !== "undefined" ) {
             change_type = "Added to Release";
         } else if ( release === "" && typeof previous_size !== "undefined") {
             change_type = "Removed from Release";
@@ -363,6 +365,7 @@ Ext.define('CustomApp', {
             change_type = "Size Change";
         }
         
+        this.logger.log(" ------- ", size, previous_size);
         var change_date = Rally.util.DateTime.toIsoString(Rally.util.DateTime.fromIsoString(snap.get('_ValidFrom')));
         this.logger.log(id, change_date, change_type, snap);
         return change_type;
@@ -374,7 +377,13 @@ Ext.define('CustomApp', {
             data: changes,
             limit: 'Infinity',
             pageSize: 5000,
-            groupField: 'ChangeDate'
+            groupField: 'ChangeDate',
+            sorters: [
+                {
+                    property: 'timestamp',
+                    direction: 'ASC'
+                }
+            ]
         });
         
         if ( this.grid ) { this.grid.destroy(); }
