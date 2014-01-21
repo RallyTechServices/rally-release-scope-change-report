@@ -150,7 +150,7 @@ Ext.define('CustomApp', {
             Deft.Chain.pipeline([this._getScopedReleases, this._getSnaps, this._processSnaps, this._makeGrid],this).then({
                 scope: this,
                 success: function(result) {
-                    this.logger.log("Final: ",result);
+                    this.logger.log("Done  ",result);
                 },
                 failure: function(error) {
                     alert(error);
@@ -330,7 +330,8 @@ Ext.define('CustomApp', {
                     Name: snap.get('Name'),
                     ChangeType: change_type,
                     timestamp: snap.get('_ValidFrom'),
-                    id: id + '' + snap.get('_ValidFrom')
+                    id: id + '' + snap.get('_ValidFrom'),
+                    ObjectID: snap.get('ObjectID')
                 });
             }
         });
@@ -360,13 +361,18 @@ Ext.define('CustomApp', {
             Ext.Array.indexOf(this.release_oids,previous_release) === -1 &&
             typeof previous_release !== "undefined" ) {
             change_type = "Added to Release";
-        } else if ( release === "" && typeof previous_size !== "undefined") {
+        } else if ( release === "" && 
+            Ext.Array.indexOf(this.release_oids,previous_release) !== -1) {
             change_type = "Removed from Release";
-        } else if ( size !== previous_size && typeof previous_size !== "undefined") {
+        } else if ( Ext.Array.indexOf(this.release_oids,release) == -1 && 
+             Ext.Array.indexOf(this.release_oids,previous_release) !== -1 ) {
+            change_type = "Removed from Release";
+        } else if ( Ext.Array.indexOf(this.release_oids,release) > -1 &&
+            size !== previous_size && 
+            typeof previous_size !== "undefined") {
             change_type = "Size Change";
         }
         
-        this.logger.log(" ------- ", size, previous_size);
         var change_date = Rally.util.DateTime.toIsoString(Rally.util.DateTime.fromIsoString(snap.get('_ValidFrom')));
         this.logger.log(id, change_date, change_type, snap);
         return change_type;
@@ -404,12 +410,74 @@ Ext.define('CustomApp', {
                 {text:'Size',dataIndex:'PlanEstimate'},
                 {text:'Delta',dataIndex:'ChangeValue'},
                 {text:'Action', dataIndex:'ChangeType'}
-            ]
+            ],
+            listeners: {
+                scope: this,
+                cellclick: this._onCellClick
+            }
         });
         
         return [];
     },
     _renderID: function(value,cellData,record,rowIndex,colIndex,store,view) {
         return "<a target='_top' href='" + Rally.nav.Manager.getDetailUrl(record) + "'>" + value + "</a>";
+    },
+    _onCellClick: function(grid, cell, cellIndex, record, tr, rowIndex, e, eOpts ){
+        if ( cellIndex === 5 ) {
+            var spanner = Ext.create('Ext.container.Container',{
+                html: "Loading..."
+            });
+            var popover = Ext.create('Rally.ui.popover.Popover',{
+                target: Ext.get(cell),
+                items: [ spanner ]
+            });
+            this._getRevisionInformation(record,spanner);
+        }
+    },
+    _getRevisionInformation: function(record,spanner){
+        var me = this;
+        var timestamp = record.get('timestamp').replace(/\.\d\d\d/,"");
+        var store = Ext.create('Rally.data.wsapi.Store',{
+            model:'PortfolioItem',
+            filters: [{property:'ObjectID',value:record.get('ObjectID')}],
+            fetch: ['ObjectID','RevisionHistory'],
+            autoLoad: true,
+            listeners: {
+                scope: this,
+                load: function(store,pis){
+                    Rally.data.ModelFactory.getModel({
+                        type:'RevisionHistory',
+                        success:function(model){
+                            model.load(pis[0].get('RevisionHistory').ObjectID,{
+                                fetch:['Revisions'],
+                                callback:function(result,operation){
+                                    result.getCollection('Revisions').load({
+                                        autoLoad: true,
+                                        scope: this,
+                                        callback: function(revisions, operation, success ) {
+                                            var messages = [];
+                                            Ext.Array.each(revisions,function(rev){
+                                                var under_creation = Rally.util.DateTime.toIsoString(Rally.util.DateTime.add(rev.get('CreationDate'),"minute",-1),true);                                                
+                                                var over_creation = Rally.util.DateTime.toIsoString(Rally.util.DateTime.add(rev.get('CreationDate'),"minute",1),true);                                                
+                                                console.log(rev.get('RevisionNumber'),timestamp,under_creation,over_creation);
+                                                if ( timestamp.localeCompare(over_creation) == -1 && timestamp.localeCompare(under_creation) == 1 ){
+                                                    console.log('---');
+                                                    messages.push("Rev " + rev.get('RevisionNumber') + 
+                                                        " (" + rev.get('User')._refObjectName + "):<br/>" +
+                                                        rev.get('Description') );
+                                                    console.log(messages);
+                                                    
+                                                }
+                                            });
+                                            spanner.update(messages.join('<br/>'));
+                                        }
+                                    });
+                                }
+                            });
+                        }
+                    });
+                }
+            }
+        });
     }
 });
