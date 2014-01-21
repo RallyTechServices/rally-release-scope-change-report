@@ -147,7 +147,7 @@ Ext.define('CustomApp', {
             this.start_date = start_js;
             this.end_date = end_js;
             
-            Deft.Chain.pipeline([this._getScopedReleases, this._getSnaps, this._processSnaps, this._makeGrid],this).then({
+            Deft.Chain.pipeline([this._getScopedReleases, this._getSnaps, this._processSnaps, this._makeGrids],this).then({
                 scope: this,
                 success: function(result) {
                     this.logger.log("Done  ",result);
@@ -299,6 +299,15 @@ Ext.define('CustomApp', {
         var me = this;
         this.logger.log("_processSnaps",snaps);
         var changes = [];
+        var change_summaries = {
+            add_count: 0,
+            add_points: 0,
+            remove_points: 0,
+            remove_count: 0,
+            net_points: 0,
+            net_count: 0
+        };
+        
         Ext.Array.each(snaps,function(snap){
             var change_date = Rally.util.DateTime.toIsoString(Rally.util.DateTime.fromIsoString(snap.get('_ValidFrom'))).replace(/T.*$/,"");
             var id = me._getIdFromSnap(snap);
@@ -319,6 +328,7 @@ Ext.define('CustomApp', {
                 size_difference = -1 * size_difference;
             }
             
+            
             if ( change_type ) {
                 changes.push({
                     FormattedID: id,
@@ -333,8 +343,20 @@ Ext.define('CustomApp', {
                     id: id + '' + snap.get('_ValidFrom'),
                     ObjectID: snap.get('ObjectID')
                 });
+                if ( size_difference < 0 ) {
+                    change_summaries.remove_points = change_summaries.remove_points - size_difference;
+                    change_summaries.remove_count = change_summaries.remove_count + 1;
+                    change_summaries.net_count = change_summaries.net_count - 1;
+                } else {
+                    change_summaries.add_points = change_summaries.add_points + size_difference;
+                    change_summaries.add_count = change_summaries.add_count + 1;
+                    change_summaries.net_count = change_summaries.net_count + 1;
+                }
+                change_summaries.net_points = change_summaries.net_points + size_difference;
             }
         });
+        
+        this.change_summaries = change_summaries;
         return changes;
     },
     _getIdFromSnap: function(snap){
@@ -377,8 +399,38 @@ Ext.define('CustomApp', {
         this.logger.log(id, change_date, change_type, snap);
         return change_type;
     },
-    _makeGrid: function(changes){
-        this.logger.log("_makeGrid",changes);
+    _makeGrids: function(changes) {
+        this._makeSummaryGrid();
+        this._makeDetailGrid(changes);
+        return [];
+    },
+    _makeSummaryGrid: function() {
+        this.logger.log("_makeSummaryGrid",this.change_summaries);
+        var summary = this.change_summaries;
+        
+        var data = [
+            { Name: 'Total Added', Count: summary.add_count, Points: summary.add_points },
+            { Name: 'Total Removed', Count: summary.remove_count, Points: summary.remove_points },
+            { Name: 'Net', Count: summary.net_count, Points: summary.net_points }
+        ];
+        
+        var store = Ext.create('Rally.data.custom.Store',{
+            data: data
+        });
+        if ( this.summary_grid ) { this.summary_grid.destroy(); }
+        this.summary_grid = this.down('#change_summary_box').add({
+            xtype:'rallygrid',
+            store:store,
+            showPagingToolbar: false,
+            columnCfgs: [
+                {text:' ',dataIndex:'Name'},
+                {text:'Count',dataIndex:'Count'},
+                {text:'Points',dataIndex:'Points'}
+            ]
+        });
+    },
+    _makeDetailGrid: function(changes){
+        this.logger.log("_makeDetailGrid",changes);
         this.setLoading(false);
         var store = Ext.create('Rally.data.custom.Store',{
             data: changes,
@@ -395,8 +447,8 @@ Ext.define('CustomApp', {
         
         var id_renderer = this._renderID;
         
-        if ( this.grid ) { this.grid.destroy(); }
-        this.grid = this.down('#daily_box').add({
+        if ( this.detail_grid ) { this.detail_grid.destroy(); }
+        this.detail_grid = this.down('#daily_box').add({
             xtype:'rallygrid',
             store:store,
             showPagingToolbar: false,
