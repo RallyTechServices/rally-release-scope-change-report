@@ -50,7 +50,6 @@ Ext.define('CustomApp', {
                     } else {
                         var prefixes = {};
                         Ext.Array.each(records,function(record){
-                            me.logger.log("Prefix for ", record.get('TypePath'), record.get('IDPrefix'));
                             prefixes[record.get('TypePath')] = record.get('IDPrefix');
                         });
                         this.prefixes = prefixes;
@@ -96,7 +95,7 @@ Ext.define('CustomApp', {
             listeners: {
                 scope: this,
                 change: function(rb) {
-                    this.logger.log(rb.getRecord());
+                    this.logger.log("Release Changed ", rb.getRecord());
                     this.setLoading();
                     this.down('#daily_box').removeAll();
                     this.down('#change_summary_box').removeAll();
@@ -270,12 +269,16 @@ Ext.define('CustomApp', {
             property: '_PreviousValues.' + this.alternate_pi_size_field,
             operator: 'exists',
             value: true
-        });
+        }).and(Ext.create('Rally.data.lookback.QueryFilter', {
+            property: 'Release',
+            operator: 'in',
+            value:release_oids
+        }));
         
         var type_change_filter = incoming_release_change_filter.or(outgoing_release_change_filter.or(size_change_filter));
         
         var filters = type_filter.and(date_filter).and(release_filter).and(type_change_filter);
-        
+        me.logger.log("Filter ", filters.toObject());
         Ext.create('Rally.data.lookback.SnapshotStore',{
             autoLoad: true,
             filters: filters,
@@ -287,7 +290,7 @@ Ext.define('CustomApp', {
                     if ( !successful ) {
                         deferred.reject("There was a problem retrieving changes");
                     } else {
-                        me.logger.log("Back for ",release_oids);
+                        me.logger.log("  Back for ",release_oids, snaps.length, snaps);
                         deferred.resolve(snaps);
                     }   
                 }
@@ -344,10 +347,12 @@ Ext.define('CustomApp', {
                     ObjectID: snap.get('ObjectID')
                 });
                 if ( size_difference < 0 ) {
+                    me.logger.log("Remove points ", change_type, size_difference, id);
                     change_summaries.remove_points = change_summaries.remove_points - size_difference;
                     change_summaries.remove_count = change_summaries.remove_count + 1;
                     change_summaries.net_count = change_summaries.net_count - 1;
                 } else {
+                    me.logger.log("Add points ", change_type, size_difference, id);
                     change_summaries.add_points = change_summaries.add_points + size_difference;
                     change_summaries.add_count = change_summaries.add_count + 1;
                     change_summaries.net_count = change_summaries.net_count + 1;
@@ -396,7 +401,7 @@ Ext.define('CustomApp', {
         }
         
         var change_date = Rally.util.DateTime.toIsoString(Rally.util.DateTime.fromIsoString(snap.get('_ValidFrom')));
-        this.logger.log(id, change_date, change_type, snap);
+        this.logger.log("Change type", id, change_date, change_type, snap);
         return change_type;
     },
     _makeGrids: function(changes) {
@@ -472,7 +477,12 @@ Ext.define('CustomApp', {
         return [];
     },
     _renderID: function(value,cellData,record,rowIndex,colIndex,store,view) {
-        return "<a target='_top' href='" + Rally.nav.Manager.getDetailUrl(record) + "'>" + value + "</a>";
+        return Rally.nav.DetailLink.getLink({
+            record: record.getData(),
+            text: record.get('FormattedID')
+        });
+        
+        //return "<a target='_top' href='" + Rally.nav.Manager.getDetailUrl(record) + "'>" + value + "</a>";
     },
     _onCellClick: function(grid, cell, cellIndex, record, tr, rowIndex, e, eOpts ){
         if ( cellIndex === 5 ) {
