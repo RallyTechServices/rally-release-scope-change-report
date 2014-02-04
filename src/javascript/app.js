@@ -265,6 +265,15 @@ Ext.define('CustomApp', {
             value:release_oids
         });
         
+        var deleted_item_from_release_change_filter = Ext.create('Rally.data.lookback.QueryFilter', {
+            property: 'Release',
+            operator: 'in',
+            value:release_oids
+        }).and(Ext.create('Rally.data.lookback.QueryFilter', {
+            property: '_PreviousValues.Recycled',
+            value:false
+        }));
+        
         var size_change_filter = Ext.create('Rally.data.lookback.QueryFilter',{
             property: '_PreviousValues.' + this.alternate_pi_size_field,
             operator: 'exists',
@@ -275,7 +284,10 @@ Ext.define('CustomApp', {
             value:release_oids
         }));
         
-        var type_change_filter = incoming_release_change_filter.or(outgoing_release_change_filter.or(size_change_filter));
+        var type_change_filter = incoming_release_change_filter.
+            or(outgoing_release_change_filter.
+            or(size_change_filter).
+            or(deleted_item_from_release_change_filter));
         
         var filters = type_filter.and(date_filter).and(release_filter).and(type_change_filter);
         me.logger.log("Filter ", filters.toObject());
@@ -443,9 +455,13 @@ Ext.define('CustomApp', {
             pageSize: 5000,
             groupField: 'ChangeDate',
             sorters: [
+                { 
+                    property: 'ChangeDate',
+                    direction: 'DESC'
+                },
                 {
                     property: 'timestamp',
-                    direction: 'ASC'
+                    direction: 'asc'
                 }
             ]
         });
