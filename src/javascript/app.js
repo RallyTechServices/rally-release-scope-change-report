@@ -478,13 +478,13 @@ Ext.define('CustomApp', {
                 groupHeaderTpl: '{name}'
             }],
             columnCfgs: [
-                {text:'id',dataIndex:'FormattedID',renderer: id_renderer},
+                {text:'id',dataIndex:'FormattedID', width: 60,renderer: id_renderer},
                 {text:'Name',dataIndex:'Name',flex:1},
-                {text:'Size',dataIndex:'PlanEstimate'},
-                {text:'Delta',dataIndex:'ChangeValue'},
-                {text:'Action', dataIndex:'ChangeType'}
+                {text:'Size',dataIndex:'PlanEstimate', width: 40},
+                {text:'Delta',dataIndex:'ChangeValue', width: 40},
+                {text:'Action', dataIndex:'ChangeType', width: 80}
             ],
-            listeners: {
+           listeners: {
                 scope: this,
                 cellclick: this._onCellClick
             }
