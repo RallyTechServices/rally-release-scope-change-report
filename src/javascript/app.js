@@ -478,8 +478,8 @@ Ext.define('CustomApp', {
                 groupHeaderTpl: '{name}'
             }],
             columnCfgs: [
-                {text:'id',dataIndex:'FormattedID',renderer: id_renderer, width: 40},
-                {text:'Name',dataIndex:'Name',flex:1, width: 320},
+                {text:'id',dataIndex:'FormattedID', width: 60,renderer: id_renderer},
+                {text:'Name',dataIndex:'Name',flex:1},
                 {text:'Size',dataIndex:'PlanEstimate', width: 40},
                 {text:'Delta',dataIndex:'ChangeValue', width: 40},
                 {text:'Action', dataIndex:'ChangeType', width: 80}
